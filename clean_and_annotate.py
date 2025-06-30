@@ -8,14 +8,16 @@ import json
 # [
 #   {
 #     "filename": "sample_annotations.tsv",
-#     "table_column": "sample_id",
-#     "obs_column": "sample_id",
+#     "table_key_column": "sample_id",
+#     "obs_key_column": "sample_id",
+#     "table_annotation_columns": ["tissue", "treatment"], # Columns to add to obs
 #     "annotation_name": "myanno1" # This define a suffix that is added to table_column name when a column with the same name is alredy in obs. If omitted annotation is added as suffix
 #   },
 #   {
 #     "filename": "another_annotation.tsv",
-#     "table_column": "another_id",
-#     "obs_column": "another_id",
+#     "table_key_column": "sample_id",
+#     "obs_key_column": "sample_id",
+#     "table_annotation_columns": ["ancestry"],
 #     "annotation_name": "myanno2"
 #   }
 # ]
@@ -113,20 +115,36 @@ def main():
 		with open(args.annot_samples, 'r') as f:
 			annot_samples = json.load(f)
 		for annotation_config in annot_samples:
+			print(f'processing configuration: {annotation_config}')
 			# annotation config is a dist with filename, annotation_name, table_column, obs_column
 			filename = annotation_config['filename']
-			table_column = annotation_config['table_column']
-			obs_column = annotation_config['obs_column']
+			table_key_column = annotation_config['table_key_column']
+			obs_key_column = annotation_config['obs_key_column']
+			annotation_columns = annotation_config['table_annotation_columns']
 			annotation_name = annotation_config.get('annotation_name', 'annotation')
+
+			annotation_columns.append(table_key_column)
+
 			print(f'Reading annotation file: {filename}')
 			annot_samples_df = pd.read_csv(filename, sep='\t')
-			if table_column not in annot_samples_df.columns:
-				raise ValueError(f"Column '{table_column}' not found in the annotation file '{filename}'.")
-			if obs_column not in adata.obs.columns:
-				raise ValueError(f"Column '{obs_column}' not found in adata.obs.")
+
+			if not set(annotation_columns).issubset(annot_samples_df.columns):
+				raise ValueError(f"One of the defined columns is not found in the annotation file '{filename}'.")
+			if obs_key_column not in adata.obs.columns:
+				raise ValueError(f"Column '{obs_key_column}' not found in adata.obs.")
 			# Merge the annotation file with adata.obs based on the specified columns
-			adata.obs = adata.obs.merge(annot_samples_df[[table_column, obs_column]], 
-										left_on=obs_column, right_on=table_column, how='left', suffixes=('', f'_{annotation_name}'))
+			print(f'Merging annotation file {filename} with adata.obs on {obs_key_column} and {table_key_column}')
+			adata.obs = adata.obs.merge(annot_samples_df[annotation_columns], 
+										left_on=obs_key_column, right_on=table_key_column, how='left', suffixes=('', f'_{annotation_name}'))
+			
+			# If table_key_column is now in obs, remove it
+			if table_key_column in adata.obs.columns:
+				adata.obs.drop(columns=[table_key_column], inplace=True)
+			
+			# Now make all category columns in obs to string for compatibility with diet_subset
+			for col in adata.obs.select_dtypes(include=['category']).columns:
+				adata.obs[col] = adata.obs[col].astype(str)
+
 			print(f'Annotation file {filename} merged. New obs columns: {list(adata.obs.columns)}')
 			
 	# Diet subset using include_bc flag
