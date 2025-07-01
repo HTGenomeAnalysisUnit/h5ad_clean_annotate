@@ -122,29 +122,34 @@ def main():
 			obs_key_column = annotation_config['obs_key_column']
 			annotation_columns = annotation_config['table_annotation_columns']
 			annotation_name = annotation_config.get('annotation_name', 'annotation')
-
-			annotation_columns.append(table_key_column)
-
+			
 			print(f'Reading annotation file: {filename}')
 			annot_samples_df = pd.read_csv(filename, sep='\t')
 
-			if not set(annotation_columns).issubset(annot_samples_df.columns):
+			full_table_columns = annotation_columns + [table_key_column]
+
+			if not set(full_table_columns).issubset(annot_samples_df.columns):
 				raise ValueError(f"One of the defined columns is not found in the annotation file '{filename}'.")
 			if obs_key_column not in adata.obs.columns:
 				raise ValueError(f"Column '{obs_key_column}' not found in adata.obs.")
 			# Merge the annotation file with adata.obs based on the specified columns
 			print(f'Merging annotation file {filename} with adata.obs on {obs_key_column} and {table_key_column}')
-			adata.obs = adata.obs.merge(annot_samples_df[annotation_columns], 
-										left_on=obs_key_column, right_on=table_key_column, how='left', suffixes=('', f'_{annotation_name}'))
+			right_df = annot_samples_df[full_table_columns].set_index(table_key_column)
+			adata.obs = adata.obs.join(right_df, 
+										on=obs_key_column, how='left', 
+										rsuffix=f'_{annotation_name}')
 			
 			# If table_key_column is now in obs, remove it
 			if table_key_column in adata.obs.columns:
 				adata.obs.drop(columns=[table_key_column], inplace=True)
-			
-			# Now make all category columns in obs to string for compatibility with diet_subset
-			for col in adata.obs.select_dtypes(include=['category']).columns:
-				adata.obs[col] = adata.obs[col].astype(str)
 
+			# Check if new added column contains NaN values since this is not compatible with anndata
+			# In this case column type is set to string, and NaN is replaced with 'NOT_ASSIGNED'
+			for col in annotation_columns:
+				if adata.obs[col].isnull().any():
+					print(f"\nColumn '{col}' in obs contains NaN values. These will be replaced with 'NOT_ASSIGNED'.")
+					adata.obs[col] = adata.obs[col].astype(str).fillna('NOT_ASSIGNED')
+			
 			print(f'Annotation file {filename} merged. New obs columns: {list(adata.obs.columns)}')
 			
 	# Diet subset using include_bc flag
