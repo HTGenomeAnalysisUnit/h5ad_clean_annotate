@@ -65,12 +65,13 @@ def main():
 	else:
 		print('WARN - No additonal feature key (--keys) specified. No uns, obsm, etc. will be saved to output.')
 
+	# If clean_index is specified, remove the --* suffix from the index
+	if args.clean_index:
+		print("Cleaning index by removing --* suffix")
+		adata.obs.index = adata.obs.index.str.replace(r'--\d+$', '', regex=True)
+
 	# Given a pattern string like "{col1}--{col2}--{index}" create a new cell ID accordingly
 	if args.new_cell_id is not None:
-		if args.clean_index:
-			print("Cleaning index by removing --* suffix")
-			adata.obs.index = adata.obs.index.str.replace(r'--.*$', '', regex=True)
-
 		# Build the new cell IDs vectorially. This is much faster than apply() and
 		# works with dots in column names (e.g. 'tranche.id').
 		print(f'Create new cell IDs with pattern: {args.new_cell_id}')
