@@ -7,18 +7,18 @@ import json
 # Example of sample_annotations JSON file:
 # [
 #   {
-#     "filename": "sample_annotations.tsv",
-#     "table_key_column": "sample_id",
-#     "obs_key_column": "sample_id",
-#     "table_annotation_columns": ["tissue", "treatment"], # Columns to add to obs
-#     "annotation_name": "myanno1" # This define a suffix that is added to table_column name when a column with the same name is alredy in obs. If omitted annotation is added as suffix
+#	 "filename": "sample_annotations.tsv",
+#	 "table_key_column": "sample_id",
+#	 "obs_key_column": "sample_id",
+#	 "table_annotation_columns": ["tissue", "treatment"], # Columns to add to obs
+#	 "annotation_name": "myanno1" # This define a suffix that is added to table_column name when a column with the same name is alredy in obs. If omitted annotation is added as suffix
 #   },
 #   {
-#     "filename": "another_annotation.tsv",
-#     "table_key_column": "sample_id",
-#     "obs_key_column": "sample_id",
-#     "table_annotation_columns": ["ancestry"],
-#     "annotation_name": "myanno2"
+#	 "filename": "another_annotation.tsv",
+#	 "table_key_column": "sample_id",
+#	 "obs_key_column": "sample_id",
+#	 "table_annotation_columns": ["ancestry"],
+#	 "annotation_name": "myanno2"
 #   }
 # ]
 
@@ -41,6 +41,8 @@ def main():
 						help='A layer to use as X in the output. If not provided, the input X is used.')
 	parser.add_argument('--keys', action='store', default=None,
 						help='Comma-separated list of features to keep in new file. Ex: “uns,obsm”. If not provided, no features are saved to output.')
+	parser.add_argument( '--rename_col', type=str, action='append',
+						help='Specify a column to rename in "old_name,new_name" format. Can be used multiple times.')
 	parser.add_argument('--clean_index', action='store_true',
 						help='If provided remove --* suffix from original index before using it in new_cell_id pattern.')
 	args = parser.parse_args()
@@ -48,6 +50,32 @@ def main():
 	# Load the h5ad file
 	adata = bsc.h5ad_map.H5ADMap(args.h5ad)
 	print(f'Loaded {args.h5ad} with {adata.n_obs} cells and {adata.n_vars} genes.')
+
+	# Initialize an empty dictionary to store the renaming map
+	rename_map = {}
+
+	# Check if the --rename_col argument was provided
+	if args.rename_col:
+		print(f"Processing {len(args.rename_col)} column rename pairs...")
+		# Iterate over the list of "old_name,new_name" strings
+		for pair in args.rename_col:
+			# Split the string by the comma
+			parts = pair.split(',')
+			# Ensure there are exactly two parts
+			if len(parts) != 2:
+				raise ValueError(f"Invalid format. Expected 'old_name,new_name', but got '{pair}'")
+			
+			# Trim whitespace from both parts
+			old_name = parts[0].strip()
+			new_name = parts[1].strip()
+
+			# Check for empty names
+			if not old_name or not new_name:
+				raise ValueError(f"Column names cannot be empty in pair '{pair}'")
+
+			# Add the pair to our dictionary
+			rename_map[old_name] = new_name
+			print(f"  - Mapping '{old_name}' -> '{new_name}'")
 
 	# If a layer is specified, use it as X
 	outlayer = 'X'
@@ -152,7 +180,16 @@ def main():
 					adata.obs[col] = adata.obs[col].astype(str).fillna('NOT_ASSIGNED')
 			
 			print(f'Annotation file {filename} merged. New obs columns: {list(adata.obs.columns)}')
-			
+	
+	# Rename columns in obs if rename_map is provided
+	if len(rename_map) > 0:
+		print(f'Renaming columns in obs according to the provided map: {rename_map}')
+		for old_name, new_name in rename_map.items():
+			if old_name in adata.obs.columns:
+				adata.obs.rename(columns={old_name: new_name}, inplace=True)
+			else:
+				print(f"Warning: Column '{old_name}' not found in obs. Skipping renaming.")
+
 	# Diet subset using include_bc flag
 	print("Subset file")
 	if keys is None:
