@@ -5,7 +5,19 @@ from string import Formatter
 import json
 
 # Example of sample_annotations JSON file:
-# [
+# {
+# "new_cell_id": "{tranche.id}--{tranche.name}--{index}",
+# "clean_index": true, # If true, remove --* suffix from original index before using it in new_cell_id pattern.
+# "sanitize_obs_column_names": true # If true, sanitize obs column names
+# "subset_bc": "subset_barcodes.txt", # File with a list of barcodes to subset
+# "annot_bc": "cell_annotations.tsv", # Tab-separated file with header containing cell annotations. Cell barcodes are expected in column cell_id, other cols will be added to obs.
+# "layer": "layer_name", # A layer to use as X in the output. If not provided, the input X is used.
+# "keys": ["uns","obsm", "raw/X", "layers/layer1"], # List of additional features to keep in output. If not provided, no features are saved to output.
+# "rename_col": {
+# 	"old_name1": "new_name1"
+# 	"old_name2": "new_name2"
+# }, # Specify columns to rename as "old_name": "new_name"
+# "sample_annotations": [
 #   {
 #	 "filename": "sample_annotations.tsv",
 #	 "table_key_column": "sample_id",
@@ -21,6 +33,7 @@ import json
 #	 "annotation_name": "myanno2"
 #   }
 # ]
+# }
 
 def main():
 	#Cmd line args
@@ -29,22 +42,8 @@ def main():
 						help='h5ad input file')
 	parser.add_argument('--out', action='store', required=True,
 						help='Output h5ad file')
-	parser.add_argument('--new_cell_id', action='store', default=None, 
-					 	help="A pattern like '{col1}--{col2}--{index}' on how the new cell IDs should look like. If not provided, the old cell IDs are used.")
-	parser.add_argument('--subset_bc', action='store', default=None,
-						help='File with a list of barcodes to subset')
-	parser.add_argument('--annot_bc', action='store', default=None,
-						help='Tab-separated file with header. Cell barcodes are expected in column cell_id, other cols will be added to obs.')
-	parser.add_argument('--annot_samples', action='store', default=None,
-						help='JSON file defining sample annotations tables and strategy. If provided, the sample annotations will be added to obs.')
-	parser.add_argument('--layer', action='store', default=None,
-						help='A layer to use as X in the output. If not provided, the input X is used.')
-	parser.add_argument('--keys', action='store', default=None,
-						help='Comma-separated list of features to keep in new file. Ex: “uns,obsm”. If not provided, no features are saved to output.')
-	parser.add_argument( '--rename_col', type=str, action='append',
-						help='Specify a column to rename in "old_name,new_name" format. Can be used multiple times.')
-	parser.add_argument('--clean_index', action='store_true',
-						help='If provided remove --* suffix from original index before using it in new_cell_id pattern.')
+	parser.add_argument('--config', action='store', default=None,
+						help='JSON file defining configuration for cleaning and processing')
 	args = parser.parse_args()
 
 	# Load the h5ad file
