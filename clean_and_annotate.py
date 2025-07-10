@@ -100,6 +100,8 @@ def main():
 			raise ValueError("The cell annotation file must contain a 'cell_id' column.")
 		annot_bc.set_index('cell_id', inplace=True)
 
+	sanitize_col_names = config.get('sanitize_obs_column_names', False)
+	print(f'- Sanitize column names: {sanitize_col_names}')
 	clean_index = config.get('clean_index', False)
 	print(f'- Clean index: {clean_index}')
 	new_cell_id = config.get('new_cell_id', None)
@@ -197,7 +199,7 @@ def main():
 				adata.obs[col] = adata.obs[col].astype(str).fillna('NOT_ASSIGNED')
 		
 		print(f'Annotation file {filename} merged')
-	
+
 	# Rename columns in obs if rename_map is provided
 	if len(rename_map) > 0:
 		print(f'Renaming columns in obs according to the provided map')
@@ -207,14 +209,42 @@ def main():
 			else:
 				print(f"Warning: Column '{old_name}' not found in obs. Skipping renaming.")
 
+	# If sanitize_col_names is True, sanitize obs column names
+	if sanitize_col_names:
+		original_col_names = set(adata.obs.columns)
+		print("Sanitizing obs column names")
+		# Replace space, dot and dash with underscore
+		adata.obs.columns = adata.obs.columns.str.replace(r'[ .-]', '_', regex=True)
+		# Set everything to lowercase
+		adata.obs.columns = adata.obs.columns.str.lower()
+		# Remove leading and trailing underscores
+		adata.obs.columns = adata.obs.columns.str.strip('_')
+		# Replace - and / with underscore
+		adata.obs.columns = adata.obs.columns.str.replace(r'[-/]', '_', regex=True)
+		# Replace >= and > with greaterthan
+		adata.obs.columns = adata.obs.columns.str.replace(r'>=', 'greaterthan', regex=True)
+		adata.obs.columns = adata.obs.columns.str.replace(r'>', 'greaterthan', regex=True)
+		# Replave <= and < with lessthan
+		adata.obs.columns = adata.obs.columns.str.replace(r'<=', 'lessthan', regex=True)
+		adata.obs.columns = adata.obs.columns.str.replace(r'<', 'lessthan', regex=True)
+		# Remove brackets and curly brackets
+		adata.obs.columns = adata.obs.columns.str.replace(r'[\[\]{}]', '', regex=True)
+
+		# Print number of col names modified
+		modified_col_names = set(adata.obs.columns) - original_col_names
+		print(f"Sanitized {len(modified_col_names)}" 
+		print(f"Modified column names: {', '.join(modified_col_names)}")
+
+	print("== FINISHED PROCESSING ==")
+
 	# Diet subset using include_bc flag
-	print("Subset file")
+	print("Saving processed file")
 	if keys is None:
 		adata = adata.diet_subset(args.out, X=outlayer, row_index="include_bc")
 	else:
 		adata = adata.diet_subset(args.out, X=outlayer, row_index="include_bc", keys=keys)
 
-	print("All done")
+	print("== ALL DONE ==")
 
 if __name__ == '__main__':
 	main()
