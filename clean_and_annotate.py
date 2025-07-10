@@ -132,10 +132,11 @@ def main():
 		annot_bc = pd.read_csv(args.annot_bc, sep='\t')
 		if 'cell_id' not in annot_bc.columns:
 			raise ValueError("The annotation file must contain a 'cell_id' column.")
+		annot_bc.set_index('cell_id', inplace=True)
 		# Check if there is at least some overlap between adata.obs.index and annot_bc['cell_id']
-		if not adata.obs.index.isin(annot_bc['cell_id']).any():
+		if not adata.obs.index.isin(annot_bc.index).any():
 			raise ValueError("No matching cell IDs found between adata.obs.index and annot_bc['cell_id'].")
-		adata.obs = adata.obs.merge(annot_bc, left_index=True, right_on='cell_id', how='left')
+		adata.obs = adata.obs.join(annot_bc, how='left')
 		print(f'Annotation file merged. New obs columns: {list(adata.obs.columns)}')
 
 	# If annot_samples is provided, read the files defined in the JSON and merge with adata.obs based on configured columns
