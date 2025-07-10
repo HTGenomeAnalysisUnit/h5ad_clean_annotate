@@ -64,18 +64,22 @@ def main():
 	for scope_name, value in config.items():
 		print(f'  {scope_name}: {value}')
 
+	print("== PREPARING TO PROCESS ==")
+
 	# Set rename_map dictionary to config['rename_columns'] or an empty dict if does not exist
 	if not isinstance(config['rename_columns'], dict):
 		raise ValueError("The 'rename_columns' configuration must be a dictionary with 'old_name': 'new_name' pairs.")
 	rename_map = config.get('rename_columns', {})
+	print(f"- Found {len(rename_map)} columns to rename")
 
 	# If a layer is not specified, just use X
 	outlayer = config.get('X_layer', 'X')
+	print(f'- Using layer "{outlayer}" as X in output.')
 
 	# If keys are specified, make a list, otherwise set to None
 	keys = config.get('keys', None)
 	if keys is not None:
-		print(f'Keeping the following features in output: {keys}')
+		print(f'- Keeping the following features in output: {keys}')
 	else:
 		print('WARN - No additonal feature keys specified. No uns, obsm, layers will be saved to output.')
 
@@ -83,36 +87,34 @@ def main():
 	subset_bc_file = config.get('subset_bc', None)
 	subset_bc = pd.DataFrame()
 	if subset_bc_file is not None:
-		print(f'Reading subset barcodes from file: {subset_bc_file}')
+		print(f'- Reading subset barcodes from file: {subset_bc_file}')
 		subset_bc = pd.read_csv(subset_bc_file, header=None, names=['cell_id'])['cell_id'].astype(str).tolist()
 
 	# If annot_bc is specified read the file and store the barcode annotations
 	annot_bc_file = config.get('annot_bc', None)
 	annot_bc = pd.DataFrame()
 	if annot_bc_file is not None:
-		print(f'Reading annotation file: {annot_bc_file}')
+		print(f'- Reading annotation file: {annot_bc_file}')
 		annot_bc = pd.read_csv(annot_bc_file, sep='\t')
 		if 'cell_id' not in annot_bc.columns:
 			raise ValueError("The cell annotation file must contain a 'cell_id' column.")
 		annot_bc.set_index('cell_id', inplace=True)
 
 	clean_index = config.get('clean_index', False)
+	print(f'- Clean index: {clean_index}')
 	new_cell_id = config.get('new_cell_id', None)
+	if new_cell_id is not None: print(f'- New cell ID pattern: {new_cell_id}')
 
 	print ("== START PROCESSING ==")
-
 	# Load the h5ad file
 	adata = bsc.h5ad_map.H5ADMap(args.h5ad)
 	print(f'Loaded {args.h5ad} with {adata.n_obs} cells and {adata.n_vars} genes.')
-
 
 	# If a layer is specified, use it as X
 	if outlayer != 'X' and outlayer not in adata.layers:
 		raise ValueError(f"Layer '{outlayer}' not found in the input file. Available layers: {list(adata.layers.keys())}")
 	print(f'Using layer "{outlayer}" as X.')
 	outlayer = f'layers/{outlayer}'
-
-
 
 	# If clean_index is specified, remove the --* suffix from the index
 	if clean_index:
@@ -198,7 +200,7 @@ def main():
 	
 	# Rename columns in obs if rename_map is provided
 	if len(rename_map) > 0:
-		print(f'Renaming columns in obs according to the provided map: {rename_map}')
+		print(f'Renaming columns in obs according to the provided map')
 		for old_name, new_name in rename_map.items():
 			if old_name in adata.obs.columns:
 				adata.obs.rename(columns={old_name: new_name}, inplace=True)
