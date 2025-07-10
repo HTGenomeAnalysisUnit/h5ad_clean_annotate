@@ -11,9 +11,9 @@ import json
 # "sanitize_obs_column_names": true # If true, sanitize obs column names
 # "subset_bc": "subset_barcodes.txt", # File with a list of barcodes to subset
 # "annot_bc": "cell_annotations.tsv", # Tab-separated file with header containing cell annotations. Cell barcodes are expected in column cell_id, other cols will be added to obs.
-# "layer": "layer_name", # A layer to use as X in the output. If not provided, the input X is used.
+# "X_layer": "layer_name", # A layer to use as X in the output. If not provided, the input X is used.
 # "keys": ["uns","obsm", "raw/X", "layers/layer1"], # List of additional features to keep in output. If not provided, no features are saved to output.
-# "rename_col": {
+# "rename_columns": {
 # 	"old_name1": "new_name1"
 # 	"old_name2": "new_name2"
 # }, # Specify columns to rename as "old_name": "new_name"
@@ -35,6 +35,8 @@ import json
 # ]
 # }
 
+VERSION = "0.1.0"
+
 def main():
 	#Cmd line args
 	parser = argparse.ArgumentParser(description='Clean cell IDs and eventually subset the dataset')
@@ -42,68 +44,88 @@ def main():
 						help='h5ad input file')
 	parser.add_argument('--out', action='store', required=True,
 						help='Output h5ad file')
-	parser.add_argument('--config', action='store', default=None,
+	parser.add_argument('--config', action='store', default=None, required=True,
 						help='JSON file defining configuration for cleaning and processing')
 	args = parser.parse_args()
+
+	print(f"== H5AD CLEAN AND ANNOTATE VERSION {VERSION} ==")
+
+	# Load the configuration file
+	try:
+		with open(args.config, 'r') as f:
+			config = json.load(f)
+	except FileNotFoundError:
+		raise FileNotFoundError(f"Configuration file '{args.config}' not found.")
+	except json.JSONDecodeError:
+		raise ValueError(f"Configuration file '{args.config}' is not a valid JSON file.")
+
+	# Log the configuration
+	print(f'Configuration loaded from {args.config}:')
+	for scope_name, value in config.items():
+		print(f'  {scope_name}: {value}')
+
+	# Set rename_map dictionary to config['rename_columns'] or an empty dict if does not exist
+	if not isinstance(config['rename_columns'], dict):
+		raise ValueError("The 'rename_columns' configuration must be a dictionary with 'old_name': 'new_name' pairs.")
+	rename_map = config.get('rename_columns', {})
+
+	# If a layer is not specified, just use X
+	outlayer = config.get('X_layer', 'X')
+
+	# If keys are specified, make a list, otherwise set to None
+	keys = config.get('keys', None)
+	if keys is not None:
+		print(f'Keeping the following features in output: {keys}')
+	else:
+		print('WARN - No additonal feature keys specified. No uns, obsm, layers will be saved to output.')
+
+	# If subset_bc is specified read the file and store the barcodes
+	subset_bc_file = config.get('subset_bc', None)
+	subset_bc = pd.DataFrame()
+	if subset_bc_file is not None:
+		print(f'Reading subset barcodes from file: {subset_bc_file}')
+		subset_bc = pd.read_csv(subset_bc_file, header=None, names=['cell_id'])['cell_id'].astype(str).tolist()
+
+	# If annot_bc is specified read the file and store the barcode annotations
+	annot_bc_file = config.get('annot_bc', None)
+	annot_bc = pd.DataFrame()
+	if annot_bc_file is not None:
+		print(f'Reading annotation file: {annot_bc_file}')
+		annot_bc = pd.read_csv(annot_bc_file, sep='\t')
+		if 'cell_id' not in annot_bc.columns:
+			raise ValueError("The cell annotation file must contain a 'cell_id' column.")
+		annot_bc.set_index('cell_id', inplace=True)
+
+	clean_index = config.get('clean_index', False)
+	new_cell_id = config.get('new_cell_id', None)
+
+	print ("== START PROCESSING ==")
 
 	# Load the h5ad file
 	adata = bsc.h5ad_map.H5ADMap(args.h5ad)
 	print(f'Loaded {args.h5ad} with {adata.n_obs} cells and {adata.n_vars} genes.')
 
-	# Initialize an empty dictionary to store the renaming map
-	rename_map = {}
-
-	# Check if the --rename_col argument was provided
-	if args.rename_col:
-		print(f"Processing {len(args.rename_col)} column rename pairs...")
-		# Iterate over the list of "old_name,new_name" strings
-		for pair in args.rename_col:
-			# Split the string by the comma
-			parts = pair.split(',')
-			# Ensure there are exactly two parts
-			if len(parts) != 2:
-				raise ValueError(f"Invalid format. Expected 'old_name,new_name', but got '{pair}'")
-			
-			# Trim whitespace from both parts
-			old_name = parts[0].strip()
-			new_name = parts[1].strip()
-
-			# Check for empty names
-			if not old_name or not new_name:
-				raise ValueError(f"Column names cannot be empty in pair '{pair}'")
-
-			# Add the pair to our dictionary
-			rename_map[old_name] = new_name
-			print(f"  - Mapping '{old_name}' -> '{new_name}'")
 
 	# If a layer is specified, use it as X
-	outlayer = 'X'
-	if args.layer is not None:
-		if args.layer not in adata.layers:
-			raise ValueError(f"Layer '{args.layer}' not found in the input file. Available layers: {list(adata.layers.keys())}")
-		print(f'Using layer "{args.layer}" as X.')
-		outlayer = f'layers/{args.layer}'
+	if outlayer != 'X' and outlayer not in adata.layers:
+		raise ValueError(f"Layer '{outlayer}' not found in the input file. Available layers: {list(adata.layers.keys())}")
+	print(f'Using layer "{outlayer}" as X.')
+	outlayer = f'layers/{outlayer}'
 
-	# If keys are specified, make a list, otherwise set to None
-	keys = None
-	if args.keys is not None:
-		keys = args.keys.split(',')
-		print(f'Keeping the following features in output: {keys}')
-	else:
-		print('WARN - No additonal feature key (--keys) specified. No uns, obsm, etc. will be saved to output.')
+
 
 	# If clean_index is specified, remove the --* suffix from the index
-	if args.clean_index:
+	if clean_index:
 		print("Cleaning index by removing --* suffix")
 		adata.obs.index = adata.obs.index.str.replace(r'--\d+$', '', regex=True)
 
 	# Given a pattern string like "{col1}--{col2}--{index}" create a new cell ID accordingly
-	if args.new_cell_id is not None:
+	if new_cell_id is not None:
 		# Build the new cell IDs vectorially. This is much faster than apply() and
 		# works with dots in column names (e.g. 'tranche.id').
-		print(f'Create new cell IDs with pattern: {args.new_cell_id}')
+		print(f'Create new cell IDs with pattern: {new_cell_id}')
 		new_ids = pd.Series([""] * adata.n_obs, index=adata.obs.index, dtype=str)
-		for literal_text, field_name, _, _ in Formatter().parse(args.new_cell_id):
+		for literal_text, field_name, _, _ in Formatter().parse(new_cell_id):
 			if literal_text:
 				new_ids += literal_text
 			if field_name:
@@ -119,19 +141,13 @@ def main():
 	
 	# Set a include_bc flag in obs if the cell ID is in the subset_bc file
 	adata.obs['include_bc'] = True  # Default to include all cells
-	if args.subset_bc is not None:
-		print(f'Reading subset barcodes from file: {args.subset_bc}')
-		subset_bc = pd.read_csv(args.subset_bc, header=None, names=['cell_id'])['cell_id'].astype(str).tolist()
+	if not subset_bc.empty:
 		adata.obs['include_bc'] = adata.obs.index.isin(subset_bc)
 		print(f'N barcodes present in subset: {adata.obs["include_bc"].sum()} out of {adata.n_obs} total cells.')
 	
 	# If annot_bc is provided, read it and merge with adata.obs
-	if args.annot_bc is not None:
-		print(f'Reading annotation file: {args.annot_bc}')
-		annot_bc = pd.read_csv(args.annot_bc, sep='\t')
-		if 'cell_id' not in annot_bc.columns:
-			raise ValueError("The annotation file must contain a 'cell_id' column.")
-		annot_bc.set_index('cell_id', inplace=True)
+	if not annot_bc.empty:
+		print("Annotating cells with provided cell annotations.")
 		# Check if there is at least some overlap between adata.obs.index and annot_bc['cell_id']
 		if not adata.obs.index.isin(annot_bc.index).any():
 			raise ValueError("No matching cell IDs found between adata.obs.index and annot_bc['cell_id'].")
@@ -139,47 +155,46 @@ def main():
 		print(f'Annotation file merged. New obs columns: {list(adata.obs.columns)}')
 
 	# If annot_samples is provided, read the files defined in the JSON and merge with adata.obs based on configured columns
-	if args.annot_samples is not None:
-		print(f'Reading annotation samples config: {args.annot_samples}')
-		with open(args.annot_samples, 'r') as f:
-			annot_samples = json.load(f)
-		for annotation_config in annot_samples:
-			print(f'processing configuration: {annotation_config}')
-			# annotation config is a dist with filename, annotation_name, table_column, obs_column
-			filename = annotation_config['filename']
-			table_key_column = annotation_config['table_key_column']
-			obs_key_column = annotation_config['obs_key_column']
-			annotation_columns = annotation_config['table_annotation_columns']
-			annotation_name = annotation_config.get('annotation_name', 'annotation')
-			
-			print(f'Reading annotation file: {filename}')
-			annot_samples_df = pd.read_csv(filename, sep='\t')
+	annot_samples = config.get('sample_annotations', [])
+	if len(annot_samples) > 0:
+		print(f'Found {len(annot_samples)} sample annotation configurations to process.')
+	for annotation_config in annot_samples:
+		print(f'processing configuration: {annotation_config}')
+		# annotation config is a dist with filename, annotation_name, table_column, obs_column
+		filename = annotation_config['filename']
+		table_key_column = annotation_config['table_key_column']
+		obs_key_column = annotation_config['obs_key_column']
+		annotation_columns = annotation_config['table_annotation_columns']
+		annotation_name = annotation_config.get('annotation_name', 'annotation')
+		
+		print(f'Reading annotation file: {filename}')
+		annot_samples_df = pd.read_csv(filename, sep='\t')
 
-			full_table_columns = annotation_columns + [table_key_column]
+		full_table_columns = annotation_columns + [table_key_column]
 
-			if not set(full_table_columns).issubset(annot_samples_df.columns):
-				raise ValueError(f"One of the defined columns is not found in the annotation file '{filename}'.")
-			if obs_key_column not in adata.obs.columns:
-				raise ValueError(f"Column '{obs_key_column}' not found in adata.obs.")
-			# Merge the annotation file with adata.obs based on the specified columns
-			print(f'Merging annotation file {filename} with adata.obs on {obs_key_column} and {table_key_column}')
-			right_df = annot_samples_df[full_table_columns].set_index(table_key_column)
-			adata.obs = adata.obs.join(right_df, 
-										on=obs_key_column, how='left', 
-										rsuffix=f'_{annotation_name}')
-			
-			# If table_key_column is now in obs, remove it
-			if table_key_column in adata.obs.columns:
-				adata.obs.drop(columns=[table_key_column], inplace=True)
+		if not set(full_table_columns).issubset(annot_samples_df.columns):
+			raise ValueError(f"One of the defined columns is not found in the annotation file '{filename}'.")
+		if obs_key_column not in adata.obs.columns:
+			raise ValueError(f"Column '{obs_key_column}' not found in adata.obs.")
+		# Merge the annotation file with adata.obs based on the specified columns
+		print(f'Merging annotation file {filename} with adata.obs on {obs_key_column} and {table_key_column}')
+		right_df = annot_samples_df[full_table_columns].set_index(table_key_column)
+		adata.obs = adata.obs.join(right_df, 
+									on=obs_key_column, how='left', 
+									rsuffix=f'_{annotation_name}')
+		
+		# If table_key_column is now in obs, remove it
+		if table_key_column in adata.obs.columns:
+			adata.obs.drop(columns=[table_key_column], inplace=True)
 
-			# Check if new added column contains NaN values since this is not compatible with anndata
-			# In this case column type is set to string, and NaN is replaced with 'NOT_ASSIGNED'
-			for col in annotation_columns:
-				if adata.obs[col].isnull().any():
-					print(f"\nColumn '{col}' in obs contains NaN values. These will be replaced with 'NOT_ASSIGNED'.")
-					adata.obs[col] = adata.obs[col].astype(str).fillna('NOT_ASSIGNED')
-			
-			print(f'Annotation file {filename} merged. New obs columns: {list(adata.obs.columns)}')
+		# Check if new added column contains NaN values since this is not compatible with anndata
+		# In this case column type is set to string, and NaN is replaced with 'NOT_ASSIGNED'
+		for col in annotation_columns:
+			if adata.obs[col].isnull().any():
+				print(f"\nColumn '{col}' in obs contains NaN values. These will be replaced with 'NOT_ASSIGNED'.")
+				adata.obs[col] = adata.obs[col].astype(str).fillna('NOT_ASSIGNED')
+		
+		print(f'Annotation file {filename} merged')
 	
 	# Rename columns in obs if rename_map is provided
 	if len(rename_map) > 0:
