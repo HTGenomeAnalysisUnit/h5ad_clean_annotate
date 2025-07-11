@@ -8,6 +8,8 @@ import json
 # {
 # "new_cell_id": "{tranche.id}--{tranche.name}--{index}",
 # "clean_index": true, # If true, remove --* suffix from original index before using it in new_cell_id pattern.
+# "select_obs_columns": ['col1','col2'], # List of columns to select from obs
+# "exclude_obs_columns": ['col1','col2'], # List of columns to remove from obs, ignored if select_obs_columns is provided
 # "sanitize_obs_column_names": true # If true, sanitize obs column names
 # "subset_bc": "subset_barcodes.txt", # File with a list of barcodes to subset
 # "annot_bc": "cell_annotations.tsv", # Tab-separated file with header containing cell annotations. Cell barcodes are expected in column cell_id, other cols will be added to obs.
@@ -106,6 +108,16 @@ def main():
 	print(f'- Clean index: {clean_index}')
 	new_cell_id = config.get('new_cell_id', None)
 	if new_cell_id is not None: print(f'- New cell ID pattern: {new_cell_id}')
+
+	# Prepare list of columns to select/exclude
+	select_obs_columns = config.get('select_obs_columns', [])
+	exclude_obs_columns = config.get('exclude_obs_columns', [])
+	if len(select_obs_columns) > 0:
+		print(f'- Selecting the following columns from obs: {select_obs_columns}')
+		if len(exclude_obs_columns) > 0:
+			print("Warning: 'select_obs_columns' and 'exclude_obs_columns' are both specified. 'select_obs_columns' will be used.")
+	elif len(exclude_obs_columns) > 0:
+		print(f'- Excluding the following columns from obs: {exclude_obs_columns}')
 
 	print ("== START PROCESSING ==")
 	# Load the h5ad file
@@ -209,18 +221,29 @@ def main():
 			else:
 				print(f"Warning: Column '{old_name}' not found in obs. Skipping renaming.")
 
+	# Get the list of columns to keep in obs
+	if len(exclude_obs_columns) > 0 or len(select_obs_columns) > 0:
+		final_column_set = set(adata.obs.columns) - set(exclude_obs_columns)
+		if len(select_obs_columns) > 0:
+			final_column_set = set(select_obs_columns)
+		print(f'Reducing obs columns to: {final_column_set}')
+		
+		# Check all columns in final_column_set are in adata.obs
+		if not final_column_set.issubset(adata.obs.columns):
+			raise ValueError(f"Some columns to select are not found in adata.obs: {set(select_obs_columns) - set(adata.obs.columns)}")
+
+		# Select the columns from obs
+		adata.obs = adata.obs[list(final_column_set)].copy()
+
 	# If sanitize_col_names is True, sanitize obs column names
 	if sanitize_col_names:
 		original_col_names = set(adata.obs.columns)
 		print("Sanitizing obs column names")
-		# Replace space, dot and dash with underscore
-		adata.obs.columns = adata.obs.columns.str.replace(r'[ .-]', '_', regex=True)
-		# Set everything to lowercase
-		adata.obs.columns = adata.obs.columns.str.lower()
-		# Remove leading and trailing underscores
+		# Replace space, dot, column, semicolon, slash, and dash with underscore
+		adata.obs.columns = adata.obs.columns.str.replace(r'[ .;,:-/]', '_', regex=True)
+		# Remove leading and trailing underscores/spaces
 		adata.obs.columns = adata.obs.columns.str.strip('_')
-		# Replace - and / with underscore
-		adata.obs.columns = adata.obs.columns.str.replace(r'[-/]', '_', regex=True)
+		adata.obs.columns = adata.obs.columns.str.strip(' ')
 		# Replace >= and > with greaterthan
 		adata.obs.columns = adata.obs.columns.str.replace(r'>=', 'greaterthan', regex=True)
 		adata.obs.columns = adata.obs.columns.str.replace(r'>', 'greaterthan', regex=True)
@@ -229,10 +252,12 @@ def main():
 		adata.obs.columns = adata.obs.columns.str.replace(r'<', 'lessthan', regex=True)
 		# Remove brackets and curly brackets
 		adata.obs.columns = adata.obs.columns.str.replace(r'[\[\]{}]', '', regex=True)
+		# Set everything to lowercase
+		adata.obs.columns = adata.obs.columns.str.lower()
 
 		# Print number of col names modified
 		modified_col_names = set(adata.obs.columns) - original_col_names
-		print(f"Sanitized {len(modified_col_names)}" 
+		print(f"Sanitized {len(modified_col_names)}")
 		print(f"Modified column names: {', '.join(modified_col_names)}")
 
 	print("== FINISHED PROCESSING ==")
