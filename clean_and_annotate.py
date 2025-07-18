@@ -121,10 +121,10 @@ def main():
 	print(f'Loaded {args.h5ad} with {adata.n_obs} cells and {adata.n_vars} genes.')
 
 	# If a layer is specified, use it as X
-	if outlayer != 'X' and outlayer not in adata.layers:
-		raise ValueError(f"Layer '{outlayer}' not found in the input file. Available layers: {list(adata.layers.keys())}")
-	print(f'Using layer "{outlayer}" as X.')
-	outlayer = f'layers/{outlayer}'
+	if outlayer != 'X':
+		if outlayer not in adata.layers:
+			raise ValueError(f"Layer '{outlayer}' not found in the input file. Available layers: {list(adata.layers.keys())}")
+		outlayer = f'layers/{outlayer}'
 
 	# If clean_index is specified, remove the --* suffix from the index
 	if clean_index:
