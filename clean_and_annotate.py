@@ -51,7 +51,7 @@ def main():
 	args = parser.parse_args()
 
 	print(f"== H5AD CLEAN AND ANNOTATE VERSION {VERSION} ==")
-
+	print("== PREPARING TO PROCESS ==")
 	# Load the configuration file
 	try:
 		with open(args.config, 'r') as f:
@@ -63,10 +63,6 @@ def main():
 
 	# Log the configuration
 	print(f'Configuration loaded from {args.config}:')
-	for scope_name, value in config.items():
-		print(f'  {scope_name}: {value}')
-
-	print("== PREPARING TO PROCESS ==")
 
 	# Set rename_map dictionary to config['rename_columns'] or an empty dict if does not exist
 	if not isinstance(config['rename_columns'], dict):
@@ -155,12 +151,6 @@ def main():
 		print(f'Example of new IDs: {adata.obs.index[:5].tolist()}')
 		print(f'Cell ID updated')
 	
-	# Set a include_bc flag in obs if the cell ID is in the subset_bc file
-	adata.obs['include_bc'] = True  # Default to include all cells
-	if not subset_bc.empty:
-		adata.obs['include_bc'] = adata.obs.index.isin(subset_bc)
-		print(f'N barcodes present in subset: {adata.obs["include_bc"].sum()} out of {adata.n_obs} total cells.')
-	
 	# If annot_bc is provided, read it and merge with adata.obs
 	if not annot_bc.empty:
 		print("Annotating cells with provided cell annotations.")
@@ -240,7 +230,7 @@ def main():
 		original_col_names = set(adata.obs.columns)
 		print("Sanitizing obs column names")
 		# Replace space, dot, column, semicolon, slash, and dash with underscore
-		adata.obs.columns = adata.obs.columns.str.replace(r'[ .;,:-/]', '_', regex=True)
+		adata.obs.columns = adata.obs.columns.str.replace(r'[ .,;:\-/\\]', '_', regex=True)
 		# Remove leading and trailing underscores/spaces
 		adata.obs.columns = adata.obs.columns.str.strip('_')
 		adata.obs.columns = adata.obs.columns.str.strip(' ')
@@ -259,6 +249,12 @@ def main():
 		modified_col_names = set(adata.obs.columns) - original_col_names
 		print(f"Sanitized {len(modified_col_names)}")
 		print(f"Modified column names: {', '.join(modified_col_names)}")
+
+	# Set a include_bc flag in obs if the cell ID is in the subset_bc file
+	adata.obs['include_bc'] = True  # Default to include all cells
+	if not subset_bc.empty:
+		adata.obs['include_bc'] = adata.obs.index.isin(subset_bc)
+		print(f'N barcodes present in subset: {adata.obs["include_bc"].sum()} out of {adata.n_obs} total cells.')
 
 	print("== FINISHED PROCESSING ==")
 
