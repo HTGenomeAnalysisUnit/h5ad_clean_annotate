@@ -1,0 +1,47 @@
+{
+	"new_cell_id": "{tranche.id}--{tranche.name}--{index}",
+	"clean_index": true,
+	"select_obs_columns": [
+		"col1",
+		"col2"
+	],
+	"exclude_obs_columns": [
+		"col1",
+		"col2"
+	],
+	"sanitize_obs_column_names": true,
+	"subset_bc": "subset_barcodes.txt",
+	"annot_bc": "cell_annotations.tsv",
+	"X_layer": "layer_name",
+	"keys": [
+		"uns",
+		"obsm",
+		"raw/X",
+		"layers/layer1"
+	],
+	"rename_columns": {
+		"old_name1": "new_name1",
+		"old_name2": "new_name2"
+	},
+	"sample_annotations": [
+		{
+			"filename": "sample_annotations.tsv",
+			"table_key_column": "sample_id",
+			"obs_key_column": "sample_id",
+			"table_annotation_columns": [
+				"tissue",
+				"treatment"
+			],
+			"annotation_name": "myanno1"
+		},
+		{
+			"filename": "another_annotation.tsv",
+			"table_key_column": "sample_id",
+			"obs_key_column": "sample_id",
+			"table_annotation_columns": [
+				"ancestry"
+			],
+			"annotation_name": "myanno2"
+		}
+	]
+}

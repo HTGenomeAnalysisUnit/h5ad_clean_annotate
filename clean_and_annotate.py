@@ -41,7 +41,7 @@ VERSION = "0.1.0"
 
 def main():
 	#Cmd line args
-	parser = argparse.ArgumentParser(description='Clean cell IDs and eventually subset the dataset')
+	parser = argparse.ArgumentParser(description='Clean, annotate, subset and other useful operations on h5ad files.')
 	parser.add_argument('--h5ad', action='store', required=True,
 						help='h5ad input file')
 	parser.add_argument('--out', action='store', required=True,
