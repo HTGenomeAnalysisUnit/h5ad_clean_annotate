@@ -65,10 +65,11 @@ def main():
 	print(f'Configuration loaded from {args.config}:')
 
 	# Set rename_map dictionary to config['rename_columns'] or an empty dict if does not exist
-	if not isinstance(config['rename_columns'], dict):
-		raise ValueError("The 'rename_columns' configuration must be a dictionary with 'old_name': 'new_name' pairs.")
 	rename_map = config.get('rename_columns', {})
-	print(f"- Found {len(rename_map)} columns to rename")
+	if not isinstance(rename_map, dict):
+		raise ValueError("The 'rename_columns' configuration must be a dictionary with 'old_name': 'new_name' pairs.")
+	if len(rename_map) > 0:
+		print(f"- Found {len(rename_map)} columns to rename")
 
 	# If a layer is not specified, just use X
 	outlayer = config.get('X_layer', 'X')
