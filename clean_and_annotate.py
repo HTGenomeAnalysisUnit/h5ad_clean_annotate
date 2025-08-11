@@ -89,14 +89,10 @@ def main():
 		subset_bc = pd.read_csv(subset_bc_file, header=None, names=['cell_id'])['cell_id'].astype(str).tolist()
 
 	# If annot_bc is specified read the file and store the barcode annotations
-	annot_bc_file = config.get('annot_bc', None)
+	annot_bc_files = config.get('annot_bc', [])
 	annot_bc = pd.DataFrame()
-	if annot_bc_file is not None:
-		print(f'- Reading annotation file: {annot_bc_file}')
-		annot_bc = pd.read_csv(annot_bc_file, sep='\t')
-		if 'cell_id' not in annot_bc.columns:
-			raise ValueError("The cell annotation file must contain a 'cell_id' column.")
-		annot_bc.set_index('cell_id', inplace=True)
+	if len(annot_bc_files) > 0:
+		print(f'- Found {len(annot_bc_files)} cell annotation files to process')
 
 	# Check if sanitize_obs_column_names is specified
 	sanitize_col_names = config.get('sanitize_obs_column_names', False)
@@ -162,13 +158,22 @@ def main():
 		print(f'Cell ID updated')
 	
 	# If annot_bc is provided, read it and merge with adata.obs
-	if not annot_bc.empty:
+	if len(annot_bc_files) > 0:
+		previous_col_set = set(adata.obs.columns)
 		print("Annotating cells with provided cell annotations.")
-		# Check if there is at least some overlap between adata.obs.index and annot_bc['cell_id']
-		if not adata.obs.index.isin(annot_bc.index).any():
-			raise ValueError("No matching cell IDs found between adata.obs.index and annot_bc['cell_id'].")
-		adata.obs = adata.obs.join(annot_bc, how='left')
-		print(f'Annotation file merged. New obs columns: {list(adata.obs.columns)}')
+		for annot_bc_file in annot_bc_files:
+			print(f'- Reading annotation file: {annot_bc_file}')
+			annot_bc = pd.read_csv(annot_bc_file, sep='\t')
+			if 'cell_id' not in annot_bc.columns:
+				raise ValueError("The cell annotation file must contain a 'cell_id' column.")
+			annot_bc.set_index('cell_id', inplace=True)
+			
+			# Check if there is at least some overlap between adata.obs.index and annot_bc['cell_id']
+			if not adata.obs.index.isin(annot_bc.index).any():
+				raise ValueError("No matching cell IDs found between adata.obs.index and annot_bc['cell_id'].")
+			adata.obs = adata.obs.join(annot_bc, how='left')
+		newly_added_columns = set(adata.obs.columns) - previous_col_set
+		print(f'Annotation file merged. Newly added obs columns: {list(newly_added_columns)}')
 
 	# Rename columns in obs if rename_map is provided
 	if len(rename_map) > 0:

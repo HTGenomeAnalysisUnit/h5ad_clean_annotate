@@ -11,7 +11,7 @@
 	],
 	"sanitize_obs_column_names": true,
 	"subset_bc": "subset_barcodes.txt",
-	"annot_bc": "cell_annotations.tsv",
+	"annot_bc": ["cell_annotations1.tsv", "cell_annotations2.tsv"],
 	"X_layer": "layer_name",
 	"keys": [
 		"uns",
