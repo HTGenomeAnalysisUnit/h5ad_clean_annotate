@@ -98,12 +98,22 @@ def main():
 			raise ValueError("The cell annotation file must contain a 'cell_id' column.")
 		annot_bc.set_index('cell_id', inplace=True)
 
+	# Check if sanitize_obs_column_names is specified
 	sanitize_col_names = config.get('sanitize_obs_column_names', False)
 	print(f'- Sanitize column names: {sanitize_col_names}')
 	clean_index = config.get('clean_index', False)
 	print(f'- Clean index: {clean_index}')
 	new_cell_id = config.get('new_cell_id', None)
 	if new_cell_id is not None: print(f'- New cell ID pattern: {new_cell_id}')
+
+	# Load data from make_columns config key list which contains a list of dicts
+	make_columns = config.get('make_columns', {})
+	if not isinstance(make_columns, dict):
+		raise ValueError("The 'make_columns' configuration must be a dictionary.")
+	if len(make_columns) > 0:
+		print(f'- Found {len(make_columns)} columns to create from existing ones:')
+		for new_col, pattern in make_columns.items():
+			print(f'  - {new_col} from pattern: {pattern}')
 
 	# Prepare list of columns to select/exclude
 	select_obs_columns = config.get('select_obs_columns', [])
@@ -160,6 +170,31 @@ def main():
 		adata.obs = adata.obs.join(annot_bc, how='left')
 		print(f'Annotation file merged. New obs columns: {list(adata.obs.columns)}')
 
+	# Rename columns in obs if rename_map is provided
+	if len(rename_map) > 0:
+		print(f'Renaming columns in obs according to the provided map')
+		for old_name, new_name in rename_map.items():
+			if old_name in adata.obs.columns:
+				adata.obs.rename(columns={old_name: new_name}, inplace=True)
+			else:
+				print(f"Warning: Column '{old_name}' not found in obs. Skipping renaming.")
+
+	# Create new columns based on make_columns list
+	if len(make_columns) > 0:
+		for new_col_name, pattern in make_columns.items():
+			print(f'Create new column {new_col_name} with pattern: {pattern}')
+			column_values = pd.Series([""] * adata.n_obs, index=adata.obs.index, dtype=str)
+			for literal_text, field_name, _, _ in Formatter().parse(pattern):
+				if literal_text:
+					column_values += literal_text
+				if field_name:
+					if field_name == 'index':
+						values = adata.obs.index
+					else:
+						values = adata.obs[field_name]
+					column_values += values.astype(str)
+			adata.obs[new_col_name] = column_values.values
+
 	# If annot_samples is provided, read the files defined in the JSON and merge with adata.obs based on configured columns
 	annot_samples = config.get('sample_annotations', [])
 	if len(annot_samples) > 0:
@@ -201,15 +236,6 @@ def main():
 				adata.obs[col] = adata.obs[col].astype(str).fillna('NOT_ASSIGNED')
 		
 		print(f'Annotation file {filename} merged')
-
-	# Rename columns in obs if rename_map is provided
-	if len(rename_map) > 0:
-		print(f'Renaming columns in obs according to the provided map')
-		for old_name, new_name in rename_map.items():
-			if old_name in adata.obs.columns:
-				adata.obs.rename(columns={old_name: new_name}, inplace=True)
-			else:
-				print(f"Warning: Column '{old_name}' not found in obs. Skipping renaming.")
 
 	# Get the list of columns to keep in obs
 	if len(exclude_obs_columns) > 0 or len(select_obs_columns) > 0:

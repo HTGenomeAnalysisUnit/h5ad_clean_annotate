@@ -23,6 +23,10 @@
 		"old_name1": "new_name1",
 		"old_name2": "new_name2"
 	},
+	"make_columns": {
+		"new_col1": "{oldcol1}--{oldcol2}",
+		"new_col2": "{oldcol3}_1"
+	},
 	"sample_annotations": [
 		{
 			"filename": "sample_annotations.tsv",

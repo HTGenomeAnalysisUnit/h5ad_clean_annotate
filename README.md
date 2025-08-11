@@ -100,9 +100,10 @@ The operations to perform can be defined in a JSON file. A template structure is
 
 1. Clean index
 2. Make new cell ID
-3. Add barcode based annotations
-4. Add column based annotations
-5. Rename columns using the rename map provided
-6. Filter obs columns based on include/exclude lists
-7. Sanitize obs columns
-8. Filter barcodes based on the subset_bc list
+3. Add barcode-based annotations
+4. Rename columns using the rename map provided
+5. Create new columns based on existing ones as defined in `make_columns`
+6. Add column-based annotations
+7. Filter obs columns based on include/exclude lists
+9. Sanitize obs columns
+10. Filter barcodes based on the subset_bc list
