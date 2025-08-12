@@ -207,6 +207,7 @@ def main():
 		print(f'Found {len(annot_samples)} sample annotation configurations to process.')
 	for annotation_config in annot_samples:
 		print(f'processing configuration: {annotation_config}')
+		original_obs_columns = set(adata.obs.columns)
 		# annotation config is a dist with filename, annotation_name, table_column, obs_column
 		filename = annotation_config['filename']
 		table_key_column = annotation_config['table_key_column']
@@ -230,8 +231,8 @@ def main():
 									on=obs_key_column, how='left', 
 									rsuffix=f'_{annotation_name}')
 		
-		# If table_key_column is now in obs, remove it
-		if table_key_column in adata.obs.columns:
+		# If table_key_column is now in obs and it was not before, remove it
+		if table_key_column in adata.obs.columns and table_key_column not in original_obs_columns:
 			adata.obs.drop(columns=[table_key_column], inplace=True)
 
 		# Check if new added column contains NaN values since this is not compatible with anndata
