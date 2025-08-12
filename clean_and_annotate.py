@@ -84,7 +84,7 @@ def main():
 
 	# If subset_bc is specified read the file and store the barcodes
 	subset_bc_file = config.get('subset_bc', None)
-	subset_bc = pd.DataFrame()
+	subset_bc = []
 	if subset_bc_file is not None:
 		print(f'- Reading subset barcodes from file: {subset_bc_file}')
 		subset_bc = pd.read_csv(subset_bc_file, header=None, names=['cell_id'])['cell_id'].astype(str).tolist()
@@ -285,7 +285,7 @@ def main():
 
 	# Set a include_bc flag in obs if the cell ID is in the subset_bc file
 	adata.obs['include_bc'] = True  # Default to include all cells
-	if not subset_bc.empty:
+	if len(subset_bc) > 0:
 		adata.obs['include_bc'] = adata.obs.index.isin(subset_bc)
 		print(f'N barcodes present in subset: {adata.obs["include_bc"].sum()} out of {adata.n_obs} total cells.')
 
