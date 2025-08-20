@@ -2,7 +2,7 @@
 
 A small tool that help in cleaning, subsetting and annotation h5ad file efficiently.
 
-The tool relies on bioalpha package from Bioturing for efficient processing, but no GPU is required.
+The tool relies on [AlphaSC package](https://alpha.bioturing.com/) from Bioturing for efficient processing, but no GPU is required.
 
 ## Usage
 
@@ -26,6 +26,7 @@ The operations to perform can be defined in a JSON file. A template structure is
 {
 	// Template to construct new cell IDs from obs columns. 
 	// Any obs column can be accessed using curly brakets, e.g. {mycolumn}.
+	// Use {index} to access the current obs index value
 	"new_cell_id": "{tranche.id}--{tranche.name}--{index}", 
 	
 	// If true, the index will be cleaned by removing any --[0-9]+$ suffix.
@@ -50,9 +51,9 @@ The operations to perform can be defined in a JSON file. A template structure is
 	// Path to a text file containing barcodes to include in the output h5ad file.
 	"subset_bc": "subset_barcodes.txt",
 	
-	// Path to a TSV file with 2 or more columns: barcode and annotations.
-	// Annotation columns will be added to obs as new columns using the barcode as the key.
-	"annot_bc": "cell_annotations.tsv",
+	// List of paths to TSV file(s) with 2 or more columns: cell_id and annotations.
+	// Annotation columns will be added to obs as new columns using the cell_id as the key.
+	"annot_bc": ["cell_annotations_1.tsv", "cell_annotations_2.tsv"],
 	
 	// A layer to be used as the default X in the output h5ad file.
 	"X_layer": "layer_name",
@@ -63,7 +64,7 @@ The operations to perform can be defined in a JSON file. A template structure is
 		"layers/layer1"
 	],
 
-	// A dicitonary of "old_name": "new_name" pairs to rename obs columns.
+	// A dictionary of "old_name": "new_name" pairs to rename obs columns.
 	"rename_columns": {
 		"old_name1": "new_name1",
 		"old_name2": "new_name2"
@@ -105,5 +106,5 @@ The operations to perform can be defined in a JSON file. A template structure is
 5. Create new columns based on existing ones as defined in `make_columns`
 6. Add column-based annotations
 7. Filter obs columns based on include/exclude lists
-9. Sanitize obs columns
-10. Filter barcodes based on the subset_bc list
+8. Sanitize obs columns
+9. Filter barcodes based on the subset_bc list
