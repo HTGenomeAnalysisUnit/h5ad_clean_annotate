@@ -19,6 +19,11 @@ import json
 # 	"old_name1": "new_name1"
 # 	"old_name2": "new_name2"
 # }, # Specify columns to rename as "old_name": "new_name"
+# "subset_on_obs": [{
+#   "column": "tranche.id",
+#   "values": ["T1","T2","T3"],
+#	"values_file": "subset_values.txt" # Optional file with one value per line to use as values list
+# }], # Subset the data to keep only cells where obs[column] is in values list
 # "sample_annotations": [
 #   {
 #	 "filename": "sample_annotations.tsv",
@@ -89,9 +94,23 @@ def main():
 		print(f'- Reading subset barcodes from file: {subset_bc_file}')
 		subset_bc = pd.read_csv(subset_bc_file, header=None, names=['cell_id'])['cell_id'].astype(str).tolist()
 
+	# If subset_on_obs is specified, read the values from the list and the optional file
+	subset_on_obs_config = config.get('subset_on_obs', [])
+	subset_on_obs = []
+	for obs in subset_on_obs_config:
+		column = obs['column']
+		values = obs.get('values', [])
+		values_file = obs.get('values_file', None)
+		if values_file is not None:
+			print(f'- Reading subset values from file: {values_file}')
+			file_values = pd.read_csv(values_file, header=None, names=['value'])['value'].astype(str).tolist()
+			values.extend(file_values)
+		values = list(set(values))  # Remove duplicates
+		subset_on_obs.append({'column': column, 'values': values})
+		print(f'- Found subset obs column config for column "{column}" with {len(values)} values.')
+
 	# If annot_bc is specified read the file and store the barcode annotations
 	annot_bc_files = config.get('annot_bc', [])
-	annot_bc = pd.DataFrame()
 	if len(annot_bc_files) > 0:
 		print(f'- Found {len(annot_bc_files)} cell annotation files to process')
 
@@ -288,6 +307,13 @@ def main():
 	if len(subset_bc) > 0:
 		adata.obs['include_bc'] = adata.obs.index.isin(subset_bc)
 		print(f'N barcodes present in subset: {adata.obs["include_bc"].sum()} out of {adata.n_obs} total cells.')
+
+	# Update the include_bc flag according to subset_on_obs config
+	for obs in subset_on_obs:
+		column = obs['column']
+		values = obs['values']
+		print(f'Updating include_bc flag based on obs column "{column}" with {len(values)} values.')
+		adata.obs['include_bc'] = adata.obs['include_bc'] & adata.obs[column].isin(values)
 
 	print("== FINISHED PROCESSING ==")
 

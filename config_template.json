@@ -11,6 +11,17 @@
 	],
 	"sanitize_obs_column_names": true,
 	"subset_bc": "subset_barcodes.txt",
+	"subset_on_obs": [
+		{
+			"column": "tranche.id",
+			"values": [
+				"T1",
+				"T2",
+				"T3"
+			],
+			"values_file": "subset_values.txt"
+		}
+	],
 	"annot_bc": [
 		"cell_annotations1.tsv",
 		"cell_annotations2.tsv"

@@ -50,7 +50,16 @@ The operations to perform can be defined in a JSON file. A template structure is
 	
 	// Path to a text file containing barcodes to include in the output h5ad file.
 	"subset_bc": "subset_barcodes.txt",
-	
+
+	// Subset the data to keep only cells where obs[column] is in values list
+	"subset_on_obs": [
+		{
+			"column": "tranche.id",
+			"values": ["T1","T2","T3"],
+			"values_file": "subset_values.txt" // Optional file with one value per line to use as values list
+		}
+	],
+
 	// List of paths to TSV file(s) with 2 or more columns: cell_id and annotations.
 	// Annotation columns will be added to obs as new columns using the cell_id as the key.
 	"annot_bc": ["cell_annotations_1.tsv", "cell_annotations_2.tsv"],
@@ -108,3 +117,4 @@ The operations to perform can be defined in a JSON file. A template structure is
 7. Filter obs columns based on include/exclude lists
 8. Sanitize obs columns
 9. Filter barcodes based on the subset_bc list
+10. Filter based on obs column values from `subset_on_obs`
